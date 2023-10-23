@@ -1,5 +1,6 @@
 namespace cslox {
     using System.Collections;
+    using System.Linq.Expressions;
     using System.Text.RegularExpressions;
     using static TokenType;
 
@@ -12,17 +13,169 @@ namespace cslox {
             this.tokens = tokens;
         }
 
-        public Expr Parse() {
-            try {
-                return Expression();
+        public List<Stmt> Parse() {
+            List<Stmt> stmts = new List<Stmt>();
+            while(!IsAtEnd()) {
+                stmts.Add(Declaration());
             }
-            catch(ParseError) {
+            return stmts;
+        }
+
+        private Stmt Declaration() {
+            try {
+                if(Match(VAR)) return VarDeclaration();
+                return Statement();
+            }
+            catch(ParseError error) {
+                Synchronize();
                 return null;
             }
         }
 
+        private Stmt VarDeclaration() {
+            Token name = Consume(IDENTIFIER, "Expect variable name.");
+
+            Expr initializer = null;
+            if(Match(EQUAL)) {
+                initializer = Expression();
+            }
+
+            Consume(SEMICOLON, "Expect ';' after variable declaration.");
+            return new Stmt.Var(name, initializer);
+        }
+
+        private Stmt Statement() {
+            if(Match(FOR)) return ForStatement();
+            if(Match(WHILE)) return WhileStatement();
+            if(Match(IF)) return IfStatement();
+            if(Match(PRINT)) return PrintStatement();
+            if(Match(LEFT_BRACE)) return new Stmt.Block(Block());
+            return ExpressionStatement();
+        }
+
+        private Stmt ForStatement() {
+            Consume(LEFT_PAREN, "Expect '(' after 'for'.");
+            Stmt initializer;
+            if(Match(SEMICOLON)) {
+                initializer = null;
+            }
+            else if(Match(VAR)) {
+                initializer = Declaration();
+            }
+            else {
+                initializer = ExpressionStatement();
+            }
+
+            Expr condition = null;
+            if(!Check(SEMICOLON)) {
+                condition = Expression();
+            }
+            Consume(SEMICOLON, "Expect ';' after loop condition.");
+
+            Expr increment = null;
+            if(!Check(RIGHT_PAREN)) {
+                increment = Expression();
+            }
+            Consume(RIGHT_PAREN, "Expect ')' after for clauses.");
+            Stmt body = Statement();
+            if(increment != null) {
+                body = new Stmt.Block(new List<Stmt> {
+                    body,
+                    new Stmt.Expression(increment)
+                });
+            }
+            if(condition == null) condition = new Expr.Literal(true);
+            body = new Stmt.While(condition, body);
+            if(initializer != null) {
+                body = new Stmt.Block(new List<Stmt> {
+                    initializer, 
+                    body
+                });
+            }
+            return body;
+        }
+
+        private Stmt WhileStatement() {
+            Consume(LEFT_PAREN, "Expect '(' after 'while'.");
+            Expr condition = Expression();
+            Consume(RIGHT_PAREN, "Expect ')' after condition.");
+            Stmt body = Statement();
+            return new Stmt.While(condition, body);
+        }
+
+        private Stmt IfStatement() {
+            Consume(LEFT_PAREN, "Expect '(' after 'if'.");
+            Expr condition = Expression();
+            Consume(RIGHT_PAREN, "Expect ')' after if condition.");
+
+            Stmt thenBranch = Statement();
+            Stmt elseBranch = null;
+            if(Match(ELSE)) {
+                elseBranch = Statement();
+            }
+            return new Stmt.If(condition, thenBranch, elseBranch);
+        }
+
+        private Stmt PrintStatement() {
+            Expr value = Expression();
+            Consume(SEMICOLON, "Expect ';' after value.");
+            return new Stmt.Print(value);
+        }
+
+        private Stmt ExpressionStatement() {
+            Expr expr = Expression();
+            Consume(SEMICOLON, "Expect ';' after expression.");
+            return new Stmt.Expression(expr);
+        }
+
+        private List<Stmt> Block() {
+            List<Stmt> statements = new();
+            while(!Check(RIGHT_BRACE) && !IsAtEnd()) {
+                statements.Add(Declaration());
+            }
+            Consume(RIGHT_BRACE, "Expected closing '}' after block");
+            return statements;
+        }
+
+        private Expr Assignment() {
+            Expr expr = Or();
+            if(Match(EQUAL)) {
+                Token equals = Previous();
+                Expr value = Assignment();
+
+                if(expr is Expr.Variable) {
+                    Token name = ((Expr.Variable)expr).name;
+                    return new Expr.Assign(name, value);
+                }
+
+                Error(equals, "Invalid Assignment Target.");
+            }
+
+            return expr;
+        }
+
+        private Expr Or() {
+            Expr expr = And();
+            while(Match(OR)) {
+                Token op = Previous();
+                Expr right = And();
+                expr = new Expr.Logical(expr, op, right);
+            }
+            return expr;
+        }
+
+        private Expr And() {
+            Expr expr = Equality();
+            while(Match(AND)) {
+                Token op = Previous();
+                Expr right = Equality();
+                expr = new Expr.Logical(expr, op, right);
+            }
+            return expr;
+        }
+
         private Expr Expression() {
-            return Equality();
+            return Assignment();
         }
 
         private Expr Equality() {
@@ -89,6 +242,9 @@ namespace cslox {
             if(Match(NIL)) return new Expr.Literal(null);
             if(Match(NUMBER, STRING)) {
                 return new Expr.Literal(Previous().literal);
+            }
+            if(Match(IDENTIFIER)) {
+                return new Expr.Variable(Previous());
             }
             if(Match(LEFT_PAREN)) {
                 Expr expr = Expression();

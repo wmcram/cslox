@@ -46,12 +46,12 @@ namespace cslox
             Scanner scanner = new(source);
             List<Token> tokens = scanner.ScanTokens();
             Parser parser = new(tokens);
-            Expr expression = parser.Parse();
+            List<Stmt> statements = parser.Parse();
 
 
             if(hadError) return;
 
-            interpreter.Interpret(expression);
+            interpreter.Interpret(statements);
         }
 
         public static void Error(int line, String message) {
