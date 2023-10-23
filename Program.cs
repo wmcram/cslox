@@ -42,14 +42,25 @@ namespace cslox
         static void Run(String source) {
             Scanner scanner = new(source);
             List<Token> tokens = scanner.ScanTokens();
+            Parser parser = new(tokens);
+            Expr expression = parser.Parse();
 
-            foreach(Token token in tokens) {
-                Console.WriteLine(token);
-            }
+            if(hadError) return;
+
+            Console.WriteLine(new AstPrinter().Print(expression));
         }
 
         public static void Error(int line, String message) {
             Report(line, "", message);
+        }
+
+        public static void Error(Token token, String message) {
+            if(token.type == TokenType.EOF) {
+                Report(token.line, " at end", message);
+            }
+            else {
+                Report(token.line, " at '" + token.lexeme + "'", message);
+            }
         }
 
         private static void Report(int line, String where, String message) {

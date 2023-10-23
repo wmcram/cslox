@@ -20,20 +20,23 @@
         string path = outputDir + '/' + baseName + ".cs";
         StreamWriter writer = new StreamWriter(path);
         writer.WriteLine("namespace cslox {");
-        writer.WriteLine("abstract class " + baseName + " {");
+        writer.WriteLine("public abstract class " + baseName + " {");
+        DefineVisitor(writer, baseName, types);
         foreach(string type in types) {
             string className = type.Split(':')[0].Trim();
             string fields = type.Split(':')[1].Trim();
             DefineType(writer, baseName, className, fields);
         }
+        writer.WriteLine();
+        writer.WriteLine(" public abstract R Accept<R>(Visitor<R> visitor);");
         writer.WriteLine("} \n }");
         writer.Flush();
         writer.Close();
     }
 
     void DefineType(StreamWriter writer, string baseName, string className, string fieldList) {
-        writer.WriteLine(" class " + className + " : " + baseName + " {");
-        writer.WriteLine("  " + className + "(" + fieldList + ") {");
+        writer.WriteLine(" public class " + className + " : " + baseName + " {");
+        writer.WriteLine(" public " + className + "(" + fieldList + ") {");
 
         string[] fields = fieldList.Split(", ");
         foreach(string field in fields) {
@@ -43,11 +46,23 @@
 
         writer.WriteLine("  }");
         writer.WriteLine();
+        writer.WriteLine("  public override R Accept<R>(Visitor<R> visitor) {");
+        writer.WriteLine("   return visitor.Visit" + className + baseName + "(this);");
+        writer.WriteLine("  }");
 
         foreach(string field in fields) {
-            writer.WriteLine("  readonly " + field + ";");
+            writer.WriteLine("  public readonly " + field + ";");
         }
 
+        writer.WriteLine(" }");
+    }
+
+    void DefineVisitor(StreamWriter writer, string baseName, List<string> types) {
+        writer.WriteLine(" public interface Visitor<R> {");
+        foreach(string type in types) {
+            string typeName = type.Split(':')[0].Trim();
+            writer.WriteLine("  public R Visit" + typeName + baseName + "(" + typeName + " " + baseName.ToLower() + ");");
+        }
         writer.WriteLine(" }");
     }
 
