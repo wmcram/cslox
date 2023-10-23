@@ -6,7 +6,9 @@ namespace cslox
 {
     internal class CSLox
     {
+        private static readonly Interpreter interpreter = new();
         static bool hadError = false;
+        static bool hadRuntimeError = false;
         static void Main(string[] args)  {
             if(args.Length > 1) {
                 Console.WriteLine("Usage: cslox [script]");
@@ -25,6 +27,7 @@ namespace cslox
             Run(System.Text.Encoding.Default.GetString(bytes));
 
             if(hadError) System.Environment.Exit(65);
+            if(hadRuntimeError) System.Environment.Exit(70);
         }
 
         static void RunPrompt() {
@@ -45,9 +48,10 @@ namespace cslox
             Parser parser = new(tokens);
             Expr expression = parser.Parse();
 
+
             if(hadError) return;
 
-            Console.WriteLine(new AstPrinter().Print(expression));
+            interpreter.Interpret(expression);
         }
 
         public static void Error(int line, String message) {
@@ -61,6 +65,11 @@ namespace cslox
             else {
                 Report(token.line, " at '" + token.lexeme + "'", message);
             }
+        }
+
+        public static void RuntimeError(RuntimeError error) {
+            Console.Error.WriteLine(error.Message + "\n[line " + error.token.line + "]");
+            hadRuntimeError = true;
         }
 
         private static void Report(int line, String where, String message) {
