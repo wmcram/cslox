@@ -1,9 +1,11 @@
 namespace cslox {
+    using System.Reflection.Metadata;
     using static TokenType;
     public class Interpreter : Expr.Visitor<object>, Stmt.Visitor<Object> {
 
         public readonly Environment globals;
         private Environment environment;
+        private readonly Dictionary<Expr, int> locals = new();
         public Interpreter() {
             globals = new();
             environment = globals;
@@ -133,12 +135,19 @@ namespace cslox {
         }
 
         public object VisitVariableExpr(Expr.Variable expr) {
-            return environment.Get(expr.name);
+            return LookupVariable(expr.name, expr);
         }
 
         public object VisitAssignExpr(Expr.Assign expr) {
             object value = Evaluate(expr.value);
-            environment.Assign(expr.name, value);
+
+            int distance = locals[expr];
+            if(distance != null) {
+                environment.AssignAt(distance, expr.name, value);
+            }
+            else {
+                globals.Assign(expr.name, value);
+            }
             return value;
         }
 
@@ -196,7 +205,7 @@ namespace cslox {
         }
 
         public object VisitFunctionStmt(Stmt.Function stmt) {
-            LoxFunction function = new(stmt);
+            LoxFunction function = new(stmt, environment);
             environment.Define(stmt.name.lexeme, function);
             return null;
         }
@@ -205,6 +214,20 @@ namespace cslox {
             object value = null;
             if(stmt.value != null) value = Evaluate(stmt.value);
             throw new Return(value);
+        }
+
+        private object LookupVariable(Token name, Expr expr) {
+            int distance = locals[expr];
+            if(distance != null) {
+                return environment.GetAt(distance, name.lexeme);
+            }
+            else {
+                return globals.Get(name);
+            }
+        }
+
+        public void Resolve(Expr expr, int depth) {
+            locals[expr] = depth;
         }
 
         private object Evaluate(Expr expr) {

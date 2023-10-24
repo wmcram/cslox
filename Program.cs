@@ -48,6 +48,10 @@ namespace cslox
             Parser parser = new(tokens);
             List<Stmt> statements = parser.Parse();
 
+            if(hadError) return;
+
+            Resolver resolver = new(interpreter);
+            resolver.Resolve(statements);
 
             if(hadError) return;
 

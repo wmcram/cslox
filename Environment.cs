@@ -30,12 +30,28 @@ namespace cslox {
             throw new RuntimeError(name, "Undefined Variable '" + name.lexeme + "'.");
         }
 
+        public void AssignAt(int distance, Token name, object value) {
+            Ancestor(distance).values[name.lexeme] = value;
+        }
+
         public object Get(Token name) {
             if(values.ContainsKey(name.lexeme)) {
                 return values[name.lexeme];
             }
             if(enclosing != null) return enclosing.Get(name);
             throw new RuntimeError(name, "Undefined Variable '" + name.lexeme + "'.");
+        }
+
+        public object GetAt(int distance, string name) {
+            return Ancestor(distance).values[name];
+        }
+
+        Environment Ancestor(int distance) {
+            Environment environment = this;
+            for(int i = 0; i < distance; i++) {
+                environment = environment.enclosing;
+            }
+            return environment;
         }
     }
 }

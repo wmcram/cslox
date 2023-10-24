@@ -1,7 +1,9 @@
 namespace cslox {
     public class LoxFunction : LoxCallable {
         private readonly Stmt.Function declaration;
-        public LoxFunction(Stmt.Function declaration) {
+        private readonly Environment closure;
+        public LoxFunction(Stmt.Function declaration, Environment closure) {
+            this.closure = closure;
             this.declaration = declaration;
         }
 
@@ -10,7 +12,7 @@ namespace cslox {
         public override string ToString() => $"<fn {declaration.name.lexeme}>";
 
         public object Call(Interpreter interpreter, List<object> arguments) {
-            Environment environment = new(interpreter.globals);
+            Environment environment = new(closure);
             for(int i = 0; i < declaration.parameters.Count; i++) {
                 environment.Define(declaration.parameters[i].lexeme, arguments[i]);
             }
