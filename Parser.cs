@@ -45,12 +45,42 @@ namespace cslox {
         }
 
         private Stmt Statement() {
+            if(Match(RETURN)) return ReturnStatement();
+            if(Match(FUN)) return Function("function");
             if(Match(FOR)) return ForStatement();
             if(Match(WHILE)) return WhileStatement();
             if(Match(IF)) return IfStatement();
             if(Match(PRINT)) return PrintStatement();
             if(Match(LEFT_BRACE)) return new Stmt.Block(Block());
             return ExpressionStatement();
+        }
+
+        private Stmt ReturnStatement() {
+            Token keyword = Previous();
+            Expr value = null;
+            if(!Check(SEMICOLON)) {
+                value = Expression();
+            }
+            Consume(SEMICOLON, "Expect ';' after return value.");
+            return new Stmt.Return(keyword, value);
+        }
+
+        private Stmt.Function Function(string kind) {
+            Token name = Consume(IDENTIFIER, "Expect " + kind + " name.");
+            Consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+            List<Token> parameters = new();
+            if(!Check(RIGHT_PAREN)) {
+                do {
+                    if(parameters.Count >= 255) {
+                        Error(Peek(), "Can't have more than 255 parameters.");
+                    }
+                    parameters.Add(Consume(IDENTIFIER, "Expect parameter name."));
+                } while(Match(COMMA));
+            }
+            Consume(RIGHT_PAREN, "Expect ')' after parameters.");
+            Consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+            List<Stmt> body = Block();
+            return new Stmt.Function(name, parameters, body);
         }
 
         private Stmt ForStatement() {
@@ -60,7 +90,7 @@ namespace cslox {
                 initializer = null;
             }
             else if(Match(VAR)) {
-                initializer = Declaration();
+                initializer = VarDeclaration();
             }
             else {
                 initializer = ExpressionStatement();
@@ -233,7 +263,30 @@ namespace cslox {
                 return new Expr.Unary(op, right);
             }
 
-            return Primary();
+            return Call();
+        }
+
+        private Expr Call() {
+            Expr expr = Primary();
+            while(true) {
+                if(Match(LEFT_PAREN)) {
+                    expr = FinishCall(expr);
+                }
+                else break;
+            }
+            return expr;
+        }
+
+        private Expr FinishCall(Expr callee) {
+            List<Expr> args = new();
+            if(!Check(RIGHT_PAREN)) {
+                do {
+                    if(args.Count >= 255) Error(Peek(), "Can't have more than 255 arguments.");
+                    args.Add(Expression());
+                } while (Match(COMMA));
+            }
+            Token paren = Consume(RIGHT_PAREN, "Expect ')' after arguments.");
+            return new Expr.Call(callee, paren, args);
         }
 
         private Expr Primary() {

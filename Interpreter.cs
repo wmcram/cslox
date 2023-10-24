@@ -1,9 +1,28 @@
 namespace cslox {
-    using System.Net.Mail;
     using static TokenType;
-    class Interpreter : Expr.Visitor<object>, Stmt.Visitor<Object> {
+    public class Interpreter : Expr.Visitor<object>, Stmt.Visitor<Object> {
 
-        private Environment environment = new();
+        public readonly Environment globals;
+        private Environment environment;
+        public Interpreter() {
+            globals = new();
+            environment = globals;
+            globals.Define("clock", new ClockCallable());
+        }
+
+        private class ClockCallable : LoxCallable {
+            public int Arity() {
+                return 0;
+            }
+
+            public object Call(Interpreter interpreter, List<object> args) {
+                return (double)DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            }
+
+            public override string ToString() {
+                return "<native fn>";
+            }
+        }
 
         public void Interpret(List<Stmt> stmts) {
             try {
@@ -93,6 +112,26 @@ namespace cslox {
             return null;
         }
 
+        public object VisitCallExpr(Expr.Call expr) {
+            object callee = Evaluate(expr.callee);
+            List<object> args = new();
+            foreach(Expr arg in expr.arguments) {
+                args.Add(Evaluate(arg));
+            }
+
+            if(!(callee is LoxCallable)) {
+                throw new RuntimeError(expr.paren, "Can only call functions and class constructors.");
+            }
+
+            LoxCallable function = (LoxCallable) callee;
+
+            if(args.Count != function.Arity()) {
+                throw new RuntimeError(expr.paren, "Expected " + function.Arity() + " arguments but got " + args.Count + ".");
+            }
+
+            return function.Call(this, args);
+        }
+
         public object VisitVariableExpr(Expr.Variable expr) {
             return environment.Get(expr.name);
         }
@@ -120,7 +159,7 @@ namespace cslox {
         }
 
         public object VisitWhileStmt(Stmt.While stmt) {
-            while(IsTruthy(stmt.condition)) {
+            while(IsTruthy(Evaluate(stmt.condition))) {
                 Execute(stmt.body);
             }
             return null;
@@ -156,15 +195,27 @@ namespace cslox {
             return null;
         }
 
+        public object VisitFunctionStmt(Stmt.Function stmt) {
+            LoxFunction function = new(stmt);
+            environment.Define(stmt.name.lexeme, function);
+            return null;
+        }
+
+        public object VisitReturnStmt(Stmt.Return stmt) {
+            object value = null;
+            if(stmt.value != null) value = Evaluate(stmt.value);
+            throw new Return(value);
+        }
+
         private object Evaluate(Expr expr) {
             return expr.Accept<object>(this);
         }
 
-        private void Execute(Stmt stmt) {
+        public void Execute(Stmt stmt) {
             stmt.Accept<object>(this);
         }
 
-        private void ExecuteBlock(List<Stmt> statements, Environment environment) {
+        public void ExecuteBlock(List<Stmt> statements, Environment environment) {
             Environment previous = this.environment;
             try {
                 this.environment = environment;

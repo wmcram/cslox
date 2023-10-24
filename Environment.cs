@@ -2,7 +2,7 @@ namespace cslox {
     using System.Collections.Generic;
     public class Environment {
         private readonly Dictionary<string, object> values = new();
-        readonly Environment enclosing;
+        public readonly Environment enclosing;
 
         public Environment() {
             enclosing = null;
